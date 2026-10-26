@@ -83,11 +83,14 @@ class ApiIT {
                                     mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword()));
             client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
             portA = freePort();
-            portB = freePort();
             first = launch(portA, "a");
             awaitReady(portA, first);
+            // Keep A bound before choosing B, so both URLs cannot select the same listener.
+            portB = freePort();
+            assertNotEquals(portA, portB, "Application instances must use distinct ports");
             second = launch(portB, "b");
             awaitReady(portB, second);
+            assertTrue(first.isAlive() && second.isAlive(), "Both application JVMs must be alive");
             System.out.println(
                     "TWO_JVMS pid="
                             + first.pid()
@@ -167,7 +170,7 @@ class ApiIT {
     }
 
     static int freePort() throws Exception {
-        try (var s = new ServerSocket(0, 0, InetAddress.getLoopbackAddress())) {
+        try (var s = new ServerSocket(0, 0, InetAddress.getByName("127.0.0.1"))) {
             return s.getLocalPort();
         }
     }
