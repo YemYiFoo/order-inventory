@@ -1,0 +1,55 @@
+name: fresh-order-inventory
+services:
+  mysql:
+    image: mysql:8.4.6
+    environment:
+      MYSQL_DATABASE: order_inventory
+      MYSQL_USER: order_app
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Run scripts/setup.ps1}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Run scripts/setup.ps1}
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-13306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql -h 127.0.0.1 -u order_app order_inventory -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  app:
+    build: .
+    image: fresh-order-inventory:1.0.0
+    environment: &app-environment
+      SPRING_PROFILES_ACTIVE: local
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: 8080
+      DB_URL: jdbc:mysql://mysql:3306/order_inventory?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      DB_USER: order_app
+      DB_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "127.0.0.1:${APP_PORT:-18080}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      start_period: 40s
+      retries: 20
+  app2:
+    profiles: [second]
+    image: fresh-order-inventory:1.0.0
+    environment: *app-environment
+    ports:
+      - "127.0.0.1:${APP2_PORT:-18081}:8080"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  mysql-data:
